@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "../analytics-service"
+		},
+		{
+			"path": "../evaluation-service"
+		},
+		{
+			"path": "../targeting-service"
+		},
+		{
+			"path": "../flag-service"
+		},
+		{
+			"path": "."
+		}
+	]
+}

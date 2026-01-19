@@ -1,0 +1,160 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: togglemaster_db
+    environment:
+      POSTGRES_USER: togglemaster
+      POSTGRES_PASSWORD: togglemaster
+      POSTGRES_DB: togglemaster_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - togglemaster_db_data:/var/lib/postgresql/data
+      - ./auth-service/db/init.sql:/docker-entrypoint-initdb.d/01-auth.sql:ro
+      - ./flag-service/db/init.sql:/docker-entrypoint-initdb.d/02-flags.sql:ro
+      - ./targeting-service/db/init.sql:/docker-entrypoint-initdb.d/03-targeting.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U togglemaster -d togglemaster_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service
+    environment:
+      PORT: "8001"
+      MASTER_KEY: "admin-secreto-123"
+      DATABASE_URL: "postgres://togglemaster:togglemaster@db:5432/togglemaster_db?sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  flag-service:
+    build:
+      context: ./flag-service
+      dockerfile: Dockerfile
+    container_name: flag_service
+    environment:
+      PORT: "8002"
+      DATABASE_URL: "postgres://togglemaster:togglemaster@db:5432/togglemaster_db?sslmode=disable"
+      AUTH_SERVICE_URL: "http://auth-service:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    ports:
+      - "8002:8002"
+    restart: unless-stopped
+
+  targeting-service:
+    build:
+      context: ./targeting-service
+      dockerfile: Dockerfile
+    container_name: targeting_service
+    environment:
+      PORT: "8003"
+      DATABASE_URL: "postgres://togglemaster:togglemaster@db:5432/togglemaster_db?sslmode=disable"
+      AUTH_SERVICE_URL: "http://auth-service:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    ports:
+      - "8003:8003"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: togglemaster_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  evaluation-service:
+    build:
+      context: ./evaluation-service
+      dockerfile: Dockerfile
+    container_name: evaluation_service
+    environment:
+      PORT: "8004"
+      REDIS_URL: "togglemaster-redis-28wm2e.serverless.sae1.cache.amazonaws.com:6379"
+      FLAG_SERVICE_URL: "http://flag-service:8002"
+      TARGETING_SERVICE_URL: "http://targeting-service:8003"
+      SERVICE_API_KEY: "tm_key_7e88f3adc588a03f31f9decb090244c2e5fac70b368aa69e8844677c16d05eb6"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SQS_URL: "${AWS_SQS_URL}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      flag-service:
+        condition: service_started
+      targeting-service:
+        condition: service_started
+    ports:
+      - "8004:8004"
+    restart: unless-stopped
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+    container_name: analytics_service
+    environment:
+      PORT: "8005"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_SQS_URL: "${AWS_SQS_URL}"
+      AWS_DYNAMODB_TABLE: "${AWS_DYNAMODB_TABLE}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      # Se você usa AWS Academy / credencial temporária:
+      # AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
+    ports:
+      - "8005:8005"
+    restart: unless-stopped
+  
+volumes:
+  togglemaster_db_data:
+
+
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: v1
+data:
+  mapRoles: |
+    - rolearn: arn:aws:iam::106978078844:role/eksctl-togglemaster-cluster-nodegr-NodeInstanceRole-o7rSCH72IwpH
+      groups:
+      - system:bootstrappers
+      - system:nodes
+      username: system:node:{{EC2PrivateDNSName}}
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-01-19T00:36:17Z"
+  name: aws-auth
+  namespace: kube-system
+  resourceVersion: "1247"
+  uid: c0ca159e-4b55-4064-a9c2-567bc3ab78c4
+
+  mapUsers: |
+      - userarn: arn:aws:iam::106978078844:user/adminsitrador
+        username: admin
+        groups:
+          - system:masters

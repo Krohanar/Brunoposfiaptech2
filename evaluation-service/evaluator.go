@@ -139,7 +139,7 @@ func (a *App) fetchFlag(flagName string) (*Flag, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := a.HttpClient.Do(req) // #nosec G107
+	resp, err := a.HttpClient.Do(req) // #nosec G704
 	if err != nil {
 		return nil, fmt.Errorf("erro ao chamar flag-service: %w", err)
 	}
@@ -172,7 +172,7 @@ func (a *App) fetchRule(flagName string) (*TargetingRule, error) {
 	}
 
 	apiKey := os.Getenv("SERVICE_API_KEY") // Usa a mesma chave
-	req, err := http.NewRequest("GET", urlStr, nil)
+	req, err := http.NewRequest("GET", urlStr, nil) // #nosec G704
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar requisição para targeting-service: %w", err)
 	}

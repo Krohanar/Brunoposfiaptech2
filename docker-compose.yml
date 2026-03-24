@@ -90,7 +90,7 @@ services:
     container_name: evaluation_service
     environment:
       PORT: "8004"
-      REDIS_URL: "togglemaster-redis-28wm2e.serverless.sae1.cache.amazonaws.com:6379"
+      REDIS_URL: "redis://redis:6379"
       FLAG_SERVICE_URL: "http://flag-service:8002"
       TARGETING_SERVICE_URL: "http://targeting-service:8003"
       SERVICE_API_KEY: "tm_key_7e88f3adc588a03f31f9decb090244c2e5fac70b368aa69e8844677c16d05eb6"
@@ -131,30 +131,3 @@ services:
   
 volumes:
   togglemaster_db_data:
-
-
-# Please edit the object below. Lines beginning with a '#' will be ignored,
-# and an empty file will abort the edit. If an error occurs while saving this file will be
-# reopened with the relevant failures.
-#
-apiVersion: v1
-data:
-  mapRoles: |
-    - rolearn: arn:aws:iam::106978078844:role/eksctl-togglemaster-cluster-nodegr-NodeInstanceRole-o7rSCH72IwpH
-      groups:
-      - system:bootstrappers
-      - system:nodes
-      username: system:node:{{EC2PrivateDNSName}}
-kind: ConfigMap
-metadata:
-  creationTimestamp: "2026-01-19T00:36:17Z"
-  name: aws-auth
-  namespace: kube-system
-  resourceVersion: "1247"
-  uid: c0ca159e-4b55-4064-a9c2-567bc3ab78c4
-
-  mapUsers: |
-      - userarn: arn:aws:iam::106978078844:user/adminsitrador
-        username: admin
-        groups:
-          - system:masters

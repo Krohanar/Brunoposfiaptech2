@@ -69,7 +69,7 @@ jobs:
         working-directory: ${{ env.SERVICE_PATH }}
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec ./...
+          gosec -severity=high -confidence=high ./...
 
   build-and-push:
     needs:

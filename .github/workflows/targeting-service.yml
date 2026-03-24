@@ -16,6 +16,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.TARGETING_ECR_REPOSITORY }}
   SERVICE_PATH: targeting-service
+  GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
 
 jobs:
   build-and-push:
@@ -27,7 +28,8 @@ jobs:
 
       - name: Set short SHA
         id: vars
-        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        shell: bash
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -72,3 +74,31 @@ jobs:
         run: |
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }}
+
+  update-gitops:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPOSITORY }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+
+      - name: Update targeting-service image tag
+        shell: bash
+        run: |
+          sed -i "s|image: .*togglemaster/dev/targeting-service:.*|image: 106978078844.dkr.ecr.us-east-1.amazonaws.com/togglemaster/dev/targeting-service:${GITHUB_SHA::7}|g" \
+            gitops/apps/targeting-service/deployment.yaml
+
+      - name: Commit and push changes
+        shell: bash
+        run: |
+          cd gitops
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add apps/targeting-service/deployment.yaml
+          git commit -m "Update targeting-service image to ${GITHUB_SHA::7}" || echo "No changes to commit"
+          git push

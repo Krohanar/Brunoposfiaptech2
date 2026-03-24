@@ -35,6 +35,12 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Download Go dependencies
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: |
+          go mod tidy
+          go mod download
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -52,6 +58,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+
+      - name: Download Go dependencies
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: |
+          go mod tidy
+          go mod download
 
       - name: Run gosec
         working-directory: ${{ env.SERVICE_PATH }}

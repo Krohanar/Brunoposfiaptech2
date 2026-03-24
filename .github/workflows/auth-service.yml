@@ -27,7 +27,8 @@ jobs:
 
       - name: Set short SHA
         id: vars
-        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        shell: bash
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -59,6 +60,16 @@ jobs:
             -f $SERVICE_PATH/Dockerfile \
             $SERVICE_PATH
 
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.short_sha }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
+
       - name: Tag Docker image
         run: |
           docker tag \
@@ -69,7 +80,7 @@ jobs:
         run: |
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }}
-  
+
   update-gitops:
     needs: build-and-push
     runs-on: ubuntu-latest

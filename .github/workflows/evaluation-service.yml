@@ -6,6 +6,11 @@ on:
     paths:
       - "evaluation-service/**"
       - ".github/workflows/evaluation-service.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "evaluation-service/**"
+      - ".github/workflows/evaluation-service.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,7 +24,58 @@ env:
   GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Download Go dependencies
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: ${{ env.SERVICE_PATH }}
+
+  sast:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Download Go dependencies
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run gosec
+        working-directory: ${{ env.SERVICE_PATH }}
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -severity=high -confidence=high ./...
+
   build-and-push:
+    needs:
+      - lint
+      - sast
     runs-on: ubuntu-latest
 
     steps:
@@ -34,23 +90,27 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.25"
 
       - name: Download Go dependencies
         working-directory: ${{ env.SERVICE_PATH }}
-        run: go mod tidy
+        run: |
+          go mod tidy
+          go mod download
 
       - name: Run Go tests
         working-directory: ${{ env.SERVICE_PATH }}
         run: go test ./...
 
       - name: Configure AWS credentials
+        if: github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: github.event_name == 'push'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -60,7 +120,9 @@ jobs:
             -t $ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }} \
             -f $SERVICE_PATH/Dockerfile \
             $SERVICE_PATH
+
       - name: Run Trivy image scan
+        if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.ECR_REPOSITORY }}:${{ steps.vars.outputs.short_sha }}
@@ -71,17 +133,20 @@ jobs:
           severity: CRITICAL
 
       - name: Tag Docker image
+        if: github.event_name == 'push'
         run: |
           docker tag \
             $ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }} \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }}
 
       - name: Push Docker image
+        if: github.event_name == 'push'
         run: |
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }}
 
   update-gitops:
+    if: github.event_name == 'push'
     needs: build-and-push
     runs-on: ubuntu-latest
 

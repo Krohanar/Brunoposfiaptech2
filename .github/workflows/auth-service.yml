@@ -69,3 +69,29 @@ jobs:
         run: |
           docker push \
             ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ steps.vars.outputs.short_sha }}
+  
+  update-gitops:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.GITOPS_REPOSITORY }}
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops
+
+      - name: Update auth-service image tag
+        run: |
+          sed -i "s|image: .*togglemaster/dev/auth-service:.*|image: 106978078844.dkr.ecr.us-east-1.amazonaws.com/togglemaster/dev/auth-service:${GITHUB_SHA::7}|g" \
+            gitops/apps/auth-service/deployment.yaml
+
+      - name: Commit and push changes
+        run: |
+          cd gitops
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add apps/auth-service/deployment.yaml
+          git commit -m "Update auth-service image to ${GITHUB_SHA::7}" || echo "No changes to commit"
+          git push

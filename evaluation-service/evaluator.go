@@ -50,6 +50,7 @@ func (a *App) getCombinedFlagInfo(flagName string) (*CombinedFlagInfo, error) {
 	}
 
 	log.Printf("Cache MISS para flag '%s'", flagName)
+
 	// 2. Cache MISS - Buscar dos serviços
 	info, err := a.fetchFromServices(flagName)
 	if err != nil {
@@ -124,7 +125,7 @@ func isAllowedServiceURL(rawURL string, expectedHostContains string) error {
 	return nil
 }
 
-// fetchFlag (função helper)
+// fetchFlag busca os dados de uma flag no flag-service
 func (a *App) fetchFlag(flagName string) (*Flag, error) {
 	urlStr := fmt.Sprintf("%s/flags/%s", a.FlagServiceURL, flagName)
 
@@ -133,7 +134,8 @@ func (a *App) fetchFlag(flagName string) (*Flag, error) {
 	}
 
 	apiKey := os.Getenv("SERVICE_API_KEY")
-	req, err := http.NewRequest("GET", urlStr, nil)
+
+	req, err := http.NewRequest("GET", urlStr, nil) // #nosec G704
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar requisição para flag-service: %w", err)
 	}
@@ -161,9 +163,11 @@ func (a *App) fetchFlag(flagName string) (*Flag, error) {
 	if err := json.Unmarshal(body, &flag); err != nil {
 		return nil, fmt.Errorf("erro ao desserializar resposta do flag-service: %w", err)
 	}
+
 	return &flag, nil
 }
 
+// fetchRule busca os dados de regra no targeting-service
 func (a *App) fetchRule(flagName string) (*TargetingRule, error) {
 	urlStr := fmt.Sprintf("%s/rules/%s", a.TargetingServiceURL, flagName)
 
@@ -171,7 +175,8 @@ func (a *App) fetchRule(flagName string) (*TargetingRule, error) {
 		return nil, fmt.Errorf("url do targeting-service rejeitada: %w", err)
 	}
 
-	apiKey := os.Getenv("SERVICE_API_KEY") // Usa a mesma chave
+	apiKey := os.Getenv("SERVICE_API_KEY")
+
 	req, err := http.NewRequest("GET", urlStr, nil) // #nosec G704
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar requisição para targeting-service: %w", err)
@@ -200,6 +205,7 @@ func (a *App) fetchRule(flagName string) (*TargetingRule, error) {
 	if err := json.Unmarshal(body, &rule); err != nil {
 		return nil, fmt.Errorf("erro ao desserializar resposta do targeting-service: %w", err)
 	}
+
 	return &rule, nil
 }
 
@@ -213,7 +219,7 @@ func (a *App) runEvaluationLogic(info *CombinedFlagInfo, userID string) bool {
 		return true
 	}
 
-	// 3. Processa a regra (só temos "PERCENTAGE" por enquanto)
+	// Processa a regra (só temos "PERCENTAGE" por enquanto)
 	rule := info.Rule.Rules
 	if rule.Type == "PERCENTAGE" {
 		// Converte o 'value' (que é interface{}) para float64
